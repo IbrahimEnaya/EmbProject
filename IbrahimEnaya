@@ -1,0 +1,135 @@
+unsigned int ADC_Rd(unsigned int channel);
+void main();
+char pump ='x';
+unsigned int wtrLvl1;
+unsigned int wtrlvl2;
+unsigned int ADC_read1(void);
+unsigned int ADC_read0(void);
+void ADCInit(void);
+void UART_init(int x);
+char UART_RxChar(void);
+unsigned int x =0;
+unsigned int y=1;
+void interrupt(){
+while(((wtrLvl1 >= 0 ) && (wtrLvl1 <=600)) || ((wtrLvl2 >= 0 ) && (wtrLvl2 <=600))){
+     PORTB = PORTB & 0xF7; //TURN OFF PUMPS
+      PORTB = PORTB & 0xFB;
+     PORTB = PORTB & 0XDF;
+     PORTB = PORTB | 0x80 ;
+     delay_ms(100);
+     PORTB = portb & 0xBF;  //RED LED BLINKING
+     wtrLvl1 = ADC_read0();
+     delay_ms(50);
+     wtrLvl2 = ADC_read1();
+     //WAIT UNTIL TANK IS FILLED AGAIN
+     }
+INTCON = INTCON & 0xFD;
+
+
+}
+unsigned int ADC_read1(void){
+ADCON0= 0x49;        //AN0
+ADCON0 = ADCON0 | 0x04;
+     while((ADCON0 & 0x04)); // wait until the GO/DONE bit is reset, the ATD reading is ready
+return ((ADRESH<<8)|(ADRESL));
+ }
+
+
+ unsigned int ADC_read0(void){
+ADCON0 = 0x41;
+ADCON0 = ADCON0 | 0x04;     //AN1
+     while((ADCON0 & 0x04)); // wait until the GO/DONE bit is reset, the ATD reading is ready
+return ((ADRESH<<8)|(ADRESL));
+ }
+
+void main() {
+     ADCInit();
+     delay_ms(100);
+     UART_Init(9600);
+     delay_ms(100);
+     INTCON = 0x90; //endabling interrupt on pin RB0
+
+     STATUS = STATUS | 0X20; // SELECT BANK 1
+     TRISD = 0x00;
+     TRISB = TRISB & 0X01; //PORTB IS OUTPUT EXCEPT rb0
+     STATUS = STATUS & 0XDF;//BANK 0
+     
+     while(1){
+     wtrLvl1 =ADC_Read0();
+     delay_ms(70);
+     wtrLvl2 = ADC_Read1();
+     delay_ms(70);
+
+     pump ='k';
+     pump =  UART_RxChar();
+     delay_ms(70);
+
+     if(pump == 'a'){              //HOT WATER ON COLD WATER OFF
+     PORTB = PORTB | 0x08;         // PORTB3 ON
+     PORTB = PORTB & 0xFB;          //PORTB2 OFF
+     }
+
+     if(pump == 'b'){   //TURN OFF HOT WATER
+     PORTB = PORTB & 0xF7;
+     }
+
+     if(pump == 'c'){       // TURN ON COLD WATER AND TURN OFF HOT WATER
+     PORTB= PORTB | 0x04; //B2 ON
+     PORTB = PORTB & 0xF7;    //B3 OFF
+
+     }
+
+     if(pump == 'd'){               //TURN OFF COLD WATER
+     PORTB = PORTB & 0xFB;
+     }
+
+
+
+if(((wtrLvl1 >= 0 ) && (wtrLvl1 <=600)) || ((wtrLvl2 >= 0 ) && (wtrLvl2 <=600))){    //CHECK IF WATER IS LOW
+     PORTB = PORTB & 0XDF;
+     PORTB = PORTB | 0x80 ;
+     delay_ms(100);
+     PORTB = portb & 0xBF;  //RED LED BLINKING
+     }
+     else if((wtrLvl1 >600) && (wtrLvl2 > 600)){
+     PORTB = PORTB | 0x20;      //GREEN LED ON
+
+     }
+
+
+
+
+     }
+
+ }
+
+void ADCInit(void){
+     ADCON1 = 0xC0; // right justified, all channels are analog
+     TRISA= 0x0F; // Port A is input
+     ADCON0 = 0x41; //prescale 16, channel3, dont start conversion, power on ATD
+}
+unsigned int ADCintg(){
+unsigned int chl;
+return chl;
+}
+
+void UART_Init(int baudRate)
+{
+    TRISC=0x80;            // Configure Rx pin as input and Tx as output
+    TXSTA=(1<<5);  // Asynchronous mode, 8-bit data & enable transmitter
+    RCSTA=(1<<7) | (1<<4);  // Enable Serial Port and 8-bit continuous receive
+    SPBRG = (8000000UL/(long)(64UL*baudRate))-1;      // baud rate @8Mhz Clock
+}
+
+void ATD_init(void){
+ ADCON0 = 0x41;// ATD ON Fosc/16
+ ADCON1 = 0xCE;// All channels are Analog, 500 KHz, right justified
+ TRISA = 0x01;
+ }
+
+char UART_RxChar()
+{
+    while(!(PIR1 & 0xDF));    // Wait till the data is received
+    PIR1 = PIR1 & 0xDF;            // Clear receiver flag
+    return(RCREG);     // Return the received data to calling function
+}
